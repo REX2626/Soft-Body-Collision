@@ -135,6 +135,14 @@ class Vector():
         self.x += position.x
         self.y += position.y
 
+    def dot(self, other: Vector) -> float:
+        """Returns the dot product of `self` and `other`"""
+        return self.x*other.x + self.y * other.y
+
+    def distance_to(self, other: Vector) -> float:
+        """Returns the Euclidean distance between this Vector and other"""
+        return (self - other).magnitude()
+
     def copy(self) -> Vector:
         return Vector(self.x, self.y)
 
@@ -146,7 +154,84 @@ class Vector():
 
 
 
-class Rect():
+class Object():
+    def __init__(self, pos: Vector, colour: Colour = game.WHITE) -> None:
+        self.pos = pos
+        self.colour = colour
+
+
+
+class Particle(Object):
+    """
+    `size` is the radius, NOTE: this is purely visual, the particle is a single point
+    """
+    def __init__(self, pos: Vector, size: int = 8, colour: Colour = game.RED) -> None:
+        super().__init__(pos, colour)
+        self.size = size
+        self.velocity = Vector(0, 0)
+
+    def collide(self) -> None:
+        for obj in game.OBJECTS:
+            if not isinstance(obj, Rect): continue
+
+            # NOTE: This method for collision should work for quadrilaterals in general
+
+            # Use dot product to find closest point on Rect line to particle
+            # t is the ratio from start of line to end of line
+            # if  0 < t < 1  then there is a valid closest point
+
+            top_line = obj.tr - obj.tl
+            t_top = top_line.dot(self.pos - obj.tl) / top_line.dot(top_line)  # t = (a->b).(a->c) / (magnitude of top_line ^2)
+            if not 0 < t_top < 1: continue
+
+            right_line = obj.br - obj.tr
+            t_right = right_line.dot(self.pos - obj.tr) / right_line.dot(right_line)
+            if not 0 < t_right < 1: continue
+
+            bottom_line = obj.bl - obj.br
+            t_bottom = bottom_line.dot(self.pos - obj.br) / bottom_line.dot(bottom_line)
+            if not 0 < t_bottom < 1: continue
+
+            left_line = obj.tl - obj.bl
+            t_left = left_line.dot(self.pos - obj.bl) / left_line.dot(left_line)
+            if not 0 < t_left < 1: continue
+
+            # The particle now must be inside the rect
+            # Move the particle's to the closest point from top, right, bottom and left
+
+            top  = obj.tl + t_top * top_line
+            right = obj.tr + t_right * right_line
+            bottom = obj.br + t_bottom * bottom_line
+            left = obj.bl + t_left * left_line
+
+            closest = min([top, top_line], [right, right_line], [bottom, bottom_line], [left, left_line],
+                          key=lambda pair: self.pos.distance_to(pair[0]))
+
+            self.pos = closest[0]
+
+            # Reflect this particle's velocity across the normal to the line our pos is at
+            line = closest[1]
+            line_angle = line.get_angle()
+            vel_angle = self.velocity.get_angle()
+            angle_diff = vel_angle - line_angle
+            self.velocity.rotate(2*angle_diff)  # 1 diff is parallel to line, 2 diff goes away from line
+
+    def update(self, delta_time: float) -> None:
+        # Gravity
+        self.velocity.y += game.GRAVITY * delta_time
+
+        # Move
+        self.pos += self.velocity * delta_time
+
+        # Handle collision
+        self.collide()
+
+    def draw(self) -> None:
+        pygame.draw.circle(game.WIN, self.colour, self.pos.to_tuple(), self.size)
+
+
+
+class Rect(Object):
     """
     `pos` is centre of rectangle
 
@@ -155,11 +240,10 @@ class Rect():
     `outline` is the width of the outline, 0 is filled rectangle
     """
     def __init__(self, pos: Vector, width: int, height: int, rotation: float = 0, colour: Colour = game.WHITE, outline: int = 0) -> None:
-        self.pos = pos
+        super().__init__(pos, colour)
         self.width = width
         self.height = height
         self.rotation = rotation
-        self.colour = colour
         self.outline = outline
 
     def __repr__(self) -> str:
@@ -194,22 +278,7 @@ class Rect():
     def corners(self) -> tuple[Vector]:
         return self.tl, self.tr, self.bl, self.br
 
-    def update(self, delta_time):
-        self.rotation += delta_time * 30
-
     def draw(self) -> None:
-        """surf = pygame.Surface((self.width, self.height), flags=pygame.SRCALPHA)
-        pygame.draw.rect(surf, self.colour, (0, 0, self.width, self.height), self.outline)
-        #og_width, og_height = surf.get_size()
-        surf = pygame.transform.rotate(surf, self.rotation)
-        centre = Vector(surf.get_width()/2, surf.get_height()/2)
-        pos = self.pos + (centre - Vector(self.width/2, self.height/2).rotated(self._rotation))
-        #pos = self.pos.x + (surf.get_width() - og_width)/2, self.pos.y + (surf.get_height() - og_height)/2
-        game.WIN.blit(surf, pos.to_tuple())
-        x, y, width, height = surf.get_rect()
-        x += pos.x
-        y += pos.y
-        pygame.draw.rect(game.WIN, game.RED, (x, y, width, height), width=2)"""
         surf = pygame.Surface((self.width, self.height), flags=pygame.SRCALPHA)
         pygame.draw.rect(surf, self.colour, (0, 0, self.width, self.height), width=self.outline)
         surf = pygame.transform.rotate(surf, self.rotation)
