@@ -217,6 +217,13 @@ class Particle(Object):
             self.velocity.rotate(2*angle_diff)  # 1 diff is parallel to line, 2 diff goes away from line
 
     def update(self, delta_time: float) -> None:
+        # Air resitance
+        if self.velocity:
+            # Reduce velocity by a small amount so particle will completely stop if near 0 speed
+            self.velocity.set_magnitude(max(0, self.velocity.magnitude() - 0.1*delta_time))
+            # Reduce velocity proportional to velocity
+            self.velocity.set_magnitude(self.velocity.magnitude() * (1 - delta_time * game.AIR_RESISTANCE))
+
         # Gravity
         self.velocity.y += game.GRAVITY * delta_time
 
@@ -228,6 +235,97 @@ class Particle(Object):
 
     def draw(self) -> None:
         pygame.draw.circle(game.WIN, self.colour, self.pos.to_tuple(), self.size)
+
+
+
+class SoftBodyParticle(Particle):
+    def __init__(self, pos: Vector, size: int = 10, colour: Colour = game.RED) -> None:
+        super().__init__(pos, size, colour)
+        self.neighbours: list[SoftBodyParticle, float] = []
+
+    def dampen(self, force: float) -> float:
+        if force > 0:
+            return max(0, force - game.SPRING_DAMPENING)
+
+        else:
+            return min(0, force + game.SPRING_DAMPENING)
+
+    def update_springs(self) -> None:
+        """Accelerate this Particle with the Force from the springs connected to it's neighbours"""
+        for neighbour, length in self.neighbours:
+            distance = self.pos.distance_to(neighbour.pos)
+            extension = distance - length
+            force = game.SPRING_COEFFICIENT * extension
+            force = self.dampen(force)
+            acceleration = neighbour.pos - self.pos
+            acceleration.set_magnitude(force)  # Acceleration = Force, as mass == 1
+            self.velocity += acceleration
+
+    def draw_springs(self) -> None:
+        for neighbour, _ in self.neighbours:
+            pygame.draw.line(game.WIN, game.GREEN, self.pos.to_tuple(), neighbour.pos.to_tuple(), width=3)
+
+
+
+class SoftBody(Object):
+    """
+    Creates a lattice structure of SoftBodyParticles, in a square shape e.g. 8 neighbours per particle
+
+    The SoftBodyParticles are spawned in a distance of `game.SPRING_LENGTH` from each other
+
+    `pos` is the position of the top left particle
+
+    `width` and `height` are the number of particles of the dimensions of the SoftBody
+    """
+    def __init__(self, pos: Vector, width: int, height: int, colour: tuple[int, int, int] = game.BLUE) -> None:
+        super().__init__(pos, colour)
+        self.width = width
+        self.height = height
+        self.particles: list[SoftBodyParticle] = []
+        self.spawn_particles()
+
+    def spawn_particles(self) -> None:
+        # Create a list of particles at the correct positions
+        particles: list[list[SoftBodyParticle]] = []
+        for x in range(self.width):
+            particles.append([])
+            for y in range(self.height):
+                pos = Vector(self.pos.x + x*game.SPRING_LENGTH, self.pos.y + y* game.SPRING_LENGTH)
+                particles[x].append(SoftBodyParticle(pos, colour=self.colour))
+
+        # Set the neighbours of each particle and add the particle to self.particles
+        for x in range(self.width):
+            for y in range(self.height):
+                particle = particles[x][y]
+
+                # Top, right, bottom and left springs
+                if x > 0: particle.neighbours.append([particles[x-1][y], game.SPRING_LENGTH])
+                if y > 0: particle.neighbours.append([particles[x][y-1], game.SPRING_LENGTH])
+                if x < self.width-1: particle.neighbours.append([particles[x+1][y], game.SPRING_LENGTH])
+                if y < self.height-1: particle.neighbours.append([particles[x][y+1], game.SPRING_LENGTH])
+
+                # Diagonal springs, length of spring is longer
+                if x > 0 and y > 0: particle.neighbours.append([particles[x-1][y-1], 2**0.5*game.SPRING_LENGTH])
+                if x < self.width-1 and y > 0: particle.neighbours.append([particles[x+1][y-1], 2**0.5*game.SPRING_LENGTH])
+                if x > 0 and y < self.height-1: particle.neighbours.append([particles[x-1][y+1], 2**0.5*game.SPRING_LENGTH])
+                if x < self.width-1 and y < self.height-1: particle.neighbours.append([particles[x+1][y+1], 2**0.5*game.SPRING_LENGTH])
+
+                self.particles.append(particle)
+
+    def update(self, delta_time: float) -> None:
+        # The spring acceleration for all particles must be calculated before moving any particles
+        for particle in self.particles:
+            particle.update_springs()
+
+        for particle in self.particles:
+            particle.update(delta_time)
+
+    def draw(self) -> None:
+        for particle in self.particles:
+            particle.draw_springs()
+
+        for particle in self.particles:
+            particle.draw()
 
 
 
