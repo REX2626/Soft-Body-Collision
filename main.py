@@ -17,15 +17,54 @@ def handle_events():
 
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # 1 is left click
             x, y = pygame.mouse.get_pos()
-            game.OBJECTS.add(Particle(Vector(x, y)))
+            if game.SOFT_MODE:
+                game.OBJECTS.add(SoftBody(Vector(x, y), width=8, height=5))
+            else:
+                game.OBJECTS.add(Particle(Vector(x, y)))
 
-def draw():
-    game.WIN.fill(game.BLACK)
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+            game.FOLLOW_MOUSE = not game.FOLLOW_MOUSE
+
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_TAB:
+            game.SOFT_MODE = not game.SOFT_MODE
+
+    if game.FOLLOW_MOUSE:
+        x, y = pygame.mouse.get_pos()
+        soft_body.particles[0].pos = Vector(x, y)
+
+font = pygame.font.SysFont("bahnschrift", 20)
+def draw(delta_time):
+    game.WIN.fill(game.BLUE_GREY)
 
     for obj in game.OBJECTS:
         obj.draw()
 
+    label = font.render(f"FPS: {round(get_average_fps(delta_time))}", True, game.WHITE)
+    game.WIN.blit(label, (8, 8))
+
     pygame.display.update()
+
+average_fps_elapsed_time = 0
+average_fps = 0
+n_fps = 1
+showing_average_fps = 0
+def get_average_fps(delta_time):
+    global average_fps_elapsed_time, average_fps, n_fps, showing_average_fps
+    if not delta_time: return average_fps
+
+    average_fps_elapsed_time += delta_time
+    if average_fps_elapsed_time > 1:
+
+        average_fps_elapsed_time = 0
+        showing_average_fps = average_fps
+        average_fps = 1 / delta_time
+        n_fps = 1
+
+    else:
+        average_fps = (1 / delta_time + n_fps * average_fps) / (n_fps + 1)
+        n_fps += 1
+
+    return showing_average_fps
 
 def create_border():
     # Rect have a thickness of 100
@@ -44,21 +83,19 @@ def main():
     delta_time = 0
     create_border()
     create_map()
+    global soft_body
     soft_body = SoftBody(Vector(200, 0), width=5, height=5)
     game.OBJECTS.add(soft_body)
-    draw()
+    draw(1)
     time.sleep(1)
     while True:
         time1 = time.perf_counter()
 
-        draw()
+        draw(delta_time)
 
         update(delta_time)
 
         handle_events()
-
-        #x, y = pygame.mouse.get_pos()
-        #soft_body.particles[0].pos = Vector(x, y)
 
         time2 = time.perf_counter()
         delta_time = time2 - time1

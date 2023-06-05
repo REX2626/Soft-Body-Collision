@@ -165,7 +165,7 @@ class Particle(Object):
     """
     `size` is the radius, NOTE: this is purely visual, the particle is a single point
     """
-    def __init__(self, pos: Vector, size: int = 8, colour: Colour = game.RED) -> None:
+    def __init__(self, pos: Vector, size: int = 10, colour: Colour = game.BLUE) -> None:
         super().__init__(pos, colour)
         self.size = size
         self.velocity = Vector(0, 0)
@@ -219,10 +219,10 @@ class Particle(Object):
     def update(self, delta_time: float) -> None:
         # Air resitance
         if self.velocity:
-            # Reduce velocity by a small amount so particle will completely stop if near 0 speed
-            self.velocity.set_magnitude(max(0, self.velocity.magnitude() - 0.1*delta_time))
             # Reduce velocity proportional to velocity
             self.velocity.set_magnitude(self.velocity.magnitude() * (1 - delta_time * game.AIR_RESISTANCE))
+            # Reduce velocity by a small amount so particle will completely stop if near 0 speed
+            self.velocity.set_magnitude(max(0, self.velocity.magnitude() - 0.1*delta_time))
 
         # Gravity
         self.velocity.y += game.GRAVITY * delta_time
@@ -239,9 +239,34 @@ class Particle(Object):
 
 
 class SoftBodyParticle(Particle):
-    def __init__(self, pos: Vector, size: int = 10, colour: Colour = game.RED) -> None:
+    def __init__(self, pos: Vector, size: int = 10, colour: Colour = game.CYAN) -> None:
         super().__init__(pos, size, colour)
         self.neighbours: list[SoftBodyParticle, float] = []
+
+    def internal_collide_velocity(self, particles: list[SoftBodyParticle]) -> float:
+        for particle in particles:
+            if particle == self: continue
+            if self.pos.distance_to(particle.pos) < 2*self.size:
+                normal = self.pos - particle.pos
+
+                # Reflect velocity through normal
+                tangent = normal.rotated(math.pi/2)
+                line_angle = tangent.get_angle()
+                vel_angle = self.velocity.get_angle()
+                angle_diff = vel_angle - line_angle
+                self.velocity.rotate(2*angle_diff)  # 1 diff is parallel to line, 2 diff goes away from line
+                break
+
+    def internal_collide_position(self, particles: list[SoftBodyParticle]) -> float:
+        for particle in particles:
+            if particle == self: continue
+            if self.pos.distance_to(particle.pos) < 2*self.size:
+                normal = self.pos - particle.pos
+
+                # Move position outside of particle radius
+                normal.set_magnitude(2*self.size - self.pos.distance_to(particle.pos) + 1)
+                self.pos += normal
+                break
 
     def dampen(self, force: float) -> float:
         if force > 0:
@@ -263,7 +288,7 @@ class SoftBodyParticle(Particle):
 
     def draw_springs(self) -> None:
         for neighbour, _ in self.neighbours:
-            pygame.draw.line(game.WIN, game.GREEN, self.pos.to_tuple(), neighbour.pos.to_tuple(), width=3)
+            pygame.draw.line(game.WIN, game.CYAN, self.pos.to_tuple(), neighbour.pos.to_tuple(), width=3)
 
 
 
@@ -277,7 +302,7 @@ class SoftBody(Object):
 
     `width` and `height` are the number of particles of the dimensions of the SoftBody
     """
-    def __init__(self, pos: Vector, width: int, height: int, colour: tuple[int, int, int] = game.BLUE) -> None:
+    def __init__(self, pos: Vector, width: int, height: int, colour: tuple[int, int, int] = game.RED) -> None:
         super().__init__(pos, colour)
         self.width = width
         self.height = height
@@ -317,6 +342,12 @@ class SoftBody(Object):
         for particle in self.particles:
             particle.update_springs()
 
+        """for particle in self.particles:
+            particle.internal_collide_velocity(self.particles)
+
+        for particle in self.particles:
+            particle.internal_collide_position(self.particles)"""
+
         for particle in self.particles:
             particle.update(delta_time)
 
@@ -337,12 +368,13 @@ class Rect(Object):
 
     `outline` is the width of the outline, 0 is filled rectangle
     """
-    def __init__(self, pos: Vector, width: int, height: int, rotation: float = 0, colour: Colour = game.WHITE, outline: int = 0) -> None:
+    def __init__(self, pos: Vector, width: int, height: int, rotation: float = 0, colour: Colour = game.WHITE, outline: int = 5) -> None:
         super().__init__(pos, colour)
         self.width = width
         self.height = height
         self.rotation = rotation
         self.outline = outline
+        self.surf = self.create_surface()
 
     def __repr__(self) -> str:
         return f"Rect({self.pos}, {self.width}, {self.height})"
@@ -376,9 +408,12 @@ class Rect(Object):
     def corners(self) -> tuple[Vector]:
         return self.tl, self.tr, self.bl, self.br
 
-    def draw(self) -> None:
+    def create_surface(self) -> pygame.Surface:
         surf = pygame.Surface((self.width, self.height), flags=pygame.SRCALPHA)
         pygame.draw.rect(surf, self.colour, (0, 0, self.width, self.height), width=self.outline)
-        surf = pygame.transform.rotate(surf, self.rotation)
-        pos = self.pos - Vector(surf.get_width()/2, surf.get_height()/2)
-        game.WIN.blit(surf, pos.to_tuple())
+        surf = pygame.transform.rotozoom(surf, self.rotation, 1)
+        return surf
+
+    def draw(self) -> None:
+        pos = self.pos - Vector(self.surf.get_width()/2, self.surf.get_height()/2)
+        game.WIN.blit(self.surf, pos.to_tuple())

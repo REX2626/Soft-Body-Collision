@@ -4,6 +4,7 @@ WIDTH = 1000
 HEIGHT = 700
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Soft Body Collision")
+pygame.init()
 
 # Colours
 RED = (255, 0, 0)
@@ -16,10 +17,14 @@ WHITE = (255, 255, 255)
 LIGHT_GREY = (150, 150, 150)
 GREY = (70, 70, 70)
 DARK_GREY = (30, 30, 30)
+BLUE_GREY = (20, 23, 26)
 BLACK = (0, 0, 0)
 
 from objects import Object
 OBJECTS: set[Object] = set()
+
+FOLLOW_MOUSE = False
+SOFT_MODE = False
 
 
 
