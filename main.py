@@ -1,5 +1,6 @@
 import game
-from objects import Vector, Particle, SoftBody, Rect
+from objects import Vector, Particle, SoftBody, Rect, Player_Spring, Player_Pusher
+from ui import Canvas
 import time
 import pygame
 
@@ -18,7 +19,7 @@ def handle_events():
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # 1 is left click
             x, y = pygame.mouse.get_pos()
             if game.SOFT_MODE:
-                game.OBJECTS.add(SoftBody(Vector(x, y), width=8, height=5))
+                game.OBJECTS.add(SoftBody(Vector(x, y), width=6, height=4))
             else:
                 game.OBJECTS.add(Particle(Vector(x, y)))
 
@@ -28,12 +29,15 @@ def handle_events():
         elif event.type == pygame.KEYDOWN and event.key == pygame.K_TAB:
             game.SOFT_MODE = not game.SOFT_MODE
 
-    if game.FOLLOW_MOUSE:
-        x, y = pygame.mouse.get_pos()
-        soft_body.particles[0].pos = Vector(x, y)
+    keys_pressed = pygame.key.get_pressed()
+
+    if keys_pressed[pygame.K_LCTRL]:
+        game.PUSH_PARTICLES = True
+    else:
+        game.PUSH_PARTICLES = False
 
 font = pygame.font.SysFont("bahnschrift", 20)
-def draw(delta_time):
+def draw(delta_time: float) -> None:
     game.WIN.fill(game.BLUE_GREY)
 
     for obj in game.OBJECTS:
@@ -41,6 +45,8 @@ def draw(delta_time):
 
     label = font.render(f"FPS: {round(get_average_fps(delta_time))}", True, game.WHITE)
     game.WIN.blit(label, (8, 8))
+
+    Canvas.draw()
 
     pygame.display.update()
 
@@ -74,6 +80,16 @@ def create_border():
     game.OBJECTS.add(Rect(Vector(-50, game.HEIGHT/2), 100, game.HEIGHT + 100))  # LEFT
 
 def create_map():
+    # Soft body
+    global soft_body
+    soft_body = SoftBody(Vector(200, 0), width=4, height=4)
+    game.OBJECTS.add(soft_body)
+
+    # Player stuff
+    game.OBJECTS.add(Player_Spring(Vector(0, 0), soft_body.particles[0]))
+    game.OBJECTS.add(Player_Pusher(Vector(0, 0)))
+
+    # Rectangles
     game.OBJECTS.add(Rect(Vector(250, 200), 300, 75, rotation=-20))
     game.OBJECTS.add(Rect(Vector(620, 320), 350, 75, rotation=30))
     game.OBJECTS.add(Rect(Vector(270, 490), 300, 75, rotation=-25))
@@ -83,9 +99,6 @@ def main():
     delta_time = 0
     create_border()
     create_map()
-    global soft_body
-    soft_body = SoftBody(Vector(200, 0), width=5, height=5)
-    game.OBJECTS.add(soft_body)
     draw(1)
     time.sleep(1)
     while True:

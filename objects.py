@@ -417,3 +417,43 @@ class Rect(Object):
     def draw(self) -> None:
         pos = self.pos - Vector(self.surf.get_width()/2, self.surf.get_height()/2)
         game.WIN.blit(self.surf, pos.to_tuple())
+
+
+
+class Player_Spring(Object):
+    def __init__(self, pos: Vector, particle: SoftBodyParticle, colour: Colour = game.YELLOW) -> None:
+        super().__init__(pos, colour)
+        self.particle = particle
+
+    def update(self, delta_time: float) -> None:
+        if game.FOLLOW_MOUSE:
+            x, y = pygame.mouse.get_pos()
+            vec = Vector(x, y) - self.particle.pos
+            self.particle.velocity += vec * game.PLAYER_SPRING_COEFFICIENT * delta_time
+
+    def draw(self) -> None:
+        if game.FOLLOW_MOUSE:
+            x, y = pygame.mouse.get_pos()
+            pygame.draw.line(game.WIN, self.colour, (x, y), self.particle.pos.to_tuple(), width=3)
+
+
+
+class Player_Pusher(Object):
+    def update(self, delta_time: float) -> None:
+        if game.PUSH_PARTICLES:
+            x, y = pygame.mouse.get_pos()
+            pos = Vector(x, y)
+            for obj in game.OBJECTS:
+                if not isinstance(obj, SoftBody): continue
+                for particle in obj.particles:
+                    if pos.distance_to(particle.pos) < game.PUSH_RANGE:
+                        vec = particle.pos - pos
+                        vec.set_magnitude(delta_time * game.PUSH_POWER)
+                        particle.velocity += vec
+
+    def draw(self) -> None:
+        if game.PUSH_PARTICLES:
+            x, y = pygame.mouse.get_pos()
+            surf = pygame.Surface((2*game.PUSH_RANGE, 2*game.PUSH_RANGE), flags=pygame.SRCALPHA)
+            pygame.draw.circle(surf, (*game.LIGHT_GREY, 100), (game.PUSH_RANGE, game.PUSH_RANGE), game.PUSH_RANGE)
+            game.WIN.blit(surf, (x - game.PUSH_RANGE, y - game.PUSH_RANGE))

@@ -24,14 +24,18 @@ from objects import Object
 OBJECTS: set[Object] = set()
 
 FOLLOW_MOUSE = False
+PUSH_PARTICLES = False
 SOFT_MODE = False
 
 
 
 ### SIMULATION PARAMETERS ###
 GRAVITY = 100  # Gravitational acceleration
-SPRING_LENGTH = 30  # In pixels
-SPRING_COEFFICIENT = 2  # Newtons / pixel
-SPRING_DAMPENING = 1  # 0 is no dampening, greater than 0 is more dampening
+SPRING_LENGTH = 40  # In pixels
+SPRING_COEFFICIENT = 3  # Newtons / pixel
+SPRING_DAMPENING = 0  # 0 is no dampening, greater than 0 is more dampening
+PLAYER_SPRING_COEFFICIENT = 15
 AIR_RESISTANCE = 0.7  # 0 to 1, 0 is no resistance, 1 is max resistance
 RESTITUTION = 1
+PUSH_RANGE = 40  # In pixels
+PUSH_POWER = 5000
