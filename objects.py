@@ -155,6 +155,7 @@ class Vector():
 
 
 class Object():
+    __slots__ = ("pos", "colour")
     def __init__(self, pos: Vector, colour: Colour = game.WHITE) -> None:
         self.pos = pos
         self.colour = colour
@@ -165,6 +166,7 @@ class Particle(Object):
     """
     `size` is the radius, NOTE: this is purely visual, the particle is a single point
     """
+    __slots__ = ("size", "velocity")
     def __init__(self, pos: Vector, size: int = 10, colour: Colour = game.BLUE) -> None:
         super().__init__(pos, colour)
         self.size = size
@@ -239,34 +241,41 @@ class Particle(Object):
 
 
 class SoftBodyParticle(Particle):
+    __slots__ = ("neighbours")
     def __init__(self, pos: Vector, size: int = 10, colour: Colour = game.CYAN) -> None:
         super().__init__(pos, size, colour)
-        self.neighbours: list[SoftBodyParticle, float] = []
+        self.neighbours: list[list[SoftBodyParticle, float]] = []
 
-    def internal_collide_velocity(self, particles: list[SoftBodyParticle]) -> float:
-        for particle in particles:
-            if particle == self: continue
-            if self.pos.distance_to(particle.pos) < 2*self.size:
-                normal = self.pos - particle.pos
+    def internal_collide_velocity(self) -> float:
+        for obj in game.OBJECTS:
+            if not isinstance(obj, SoftBody): continue
 
-                # Reflect velocity through normal
-                tangent = normal.rotated(math.pi/2)
-                line_angle = tangent.get_angle()
-                vel_angle = self.velocity.get_angle()
-                angle_diff = vel_angle - line_angle
-                self.velocity.rotate(2*angle_diff)  # 1 diff is parallel to line, 2 diff goes away from line
-                break
+            for particle in obj.particles:
+                if particle == self: continue
+                if self.pos.distance_to(particle.pos) < 2*self.size:
+                    normal = self.pos - particle.pos
 
-    def internal_collide_position(self, particles: list[SoftBodyParticle]) -> float:
-        for particle in particles:
-            if particle == self: continue
-            if self.pos.distance_to(particle.pos) < 2*self.size:
-                normal = self.pos - particle.pos
+                    """# Reflect velocity through normal
+                    tangent = normal.rotated(math.pi/2)
+                    line_angle = tangent.get_angle()
+                    vel_angle = self.velocity.get_angle()
+                    angle_diff = vel_angle - line_angle
+                    self.velocity.rotate(2*angle_diff)  # 1 diff is parallel to line, 2 diff goes away from line
+                    self.velocity *= 1  # Dampen by 50%"""
+                    self.velocity += normal
 
-                # Move position outside of particle radius
-                normal.set_magnitude(2*self.size - self.pos.distance_to(particle.pos) + 1)
-                self.pos += normal
-                break
+    def internal_collide_position(self) -> float:
+        for obj in game.OBJECTS:
+            if not isinstance(obj, SoftBody): continue
+
+            for particle in obj.particles:
+                if particle == self: continue
+                if self.pos.distance_to(particle.pos) < 2*self.size:
+                    normal = self.pos - particle.pos
+
+                    # Move position outside of particle radius
+                    normal.set_magnitude(2*self.size - self.pos.distance_to(particle.pos) + 0)
+                    self.pos += normal
 
     def dampen(self, force: float) -> float:
         if force > 0:
@@ -275,7 +284,7 @@ class SoftBodyParticle(Particle):
         else:
             return min(0, force + game.SPRING_DAMPENING)
 
-    def update_springs(self) -> None:
+    def update_springs(self, delta_time: float) -> None:
         """Accelerate this Particle with the Force from the springs connected to it's neighbours"""
         for neighbour, length in self.neighbours:
             distance = self.pos.distance_to(neighbour.pos)
@@ -284,7 +293,7 @@ class SoftBodyParticle(Particle):
             force = self.dampen(force)
             acceleration = neighbour.pos - self.pos
             acceleration.set_magnitude(force)  # Acceleration = Force, as mass == 1
-            self.velocity += acceleration
+            self.velocity += acceleration * delta_time
 
     def draw_springs(self) -> None:
         for neighbour, _ in self.neighbours:
@@ -302,6 +311,7 @@ class SoftBody(Object):
 
     `width` and `height` are the number of particles of the dimensions of the SoftBody
     """
+    __slots__ = ("width", "height", "particles")
     def __init__(self, pos: Vector, width: int, height: int, colour: tuple[int, int, int] = game.RED) -> None:
         super().__init__(pos, colour)
         self.width = width
@@ -340,13 +350,13 @@ class SoftBody(Object):
     def update(self, delta_time: float) -> None:
         # The spring acceleration for all particles must be calculated before moving any particles
         for particle in self.particles:
-            particle.update_springs()
+            particle.update_springs(delta_time)
 
         """for particle in self.particles:
-            particle.internal_collide_velocity(self.particles)
+            particle.internal_collide_velocity()
 
         for particle in self.particles:
-            particle.internal_collide_position(self.particles)"""
+            particle.internal_collide_position()"""
 
         for particle in self.particles:
             particle.update(delta_time)
@@ -368,6 +378,7 @@ class Rect(Object):
 
     `outline` is the width of the outline, 0 is filled rectangle
     """
+    __slots__ = ("width", "height", "_rotation", "outline", "surf", "tl", "tr", "br", "bl")
     def __init__(self, pos: Vector, width: int, height: int, rotation: float = 0, colour: Colour = game.WHITE, outline: int = 5) -> None:
         super().__init__(pos, colour)
         self.width = width
@@ -375,9 +386,16 @@ class Rect(Object):
         self.rotation = rotation
         self.outline = outline
         self.surf = self.create_surface()
+        self.update_corners()
 
     def __repr__(self) -> str:
         return f"Rect({self.pos}, {self.width}, {self.height})"
+
+    def update_corners(self) -> None:
+        self.tl = self.pos + Vector(-self.width/2, -self.height/2).rotated(self._rotation)
+        self.tr = self.pos + Vector(self.width/2, -self.height/2).rotated(self._rotation)
+        self.br = self.pos + Vector(self.width/2, self.height/2).rotated(self._rotation)
+        self.bl = self.pos + Vector(-self.width/2, self.height/2).rotated(self._rotation)
 
     @property
     def rotation(self) -> float:
@@ -387,22 +405,6 @@ class Rect(Object):
     @rotation.setter
     def rotation(self, new_rotation) -> None:
         self._rotation = math.radians(new_rotation)
-
-    @property
-    def tl(self) -> Vector:
-        return self.pos + Vector(-self.width/2, -self.height/2).rotated(self._rotation)
-
-    @property
-    def tr(self) -> Vector:
-        return self.pos + Vector(self.width/2, -self.height/2).rotated(self._rotation)
-
-    @property
-    def bl(self) -> Vector:
-        return self.pos + Vector(-self.width/2, self.height/2).rotated(self._rotation)
-
-    @property
-    def br(self) -> Vector:
-        return self.pos + Vector(self.width/2, self.height/2).rotated(self._rotation)
 
     @property
     def corners(self) -> tuple[Vector]:
@@ -421,6 +423,7 @@ class Rect(Object):
 
 
 class Player_Spring(Object):
+    __slots__ = ("particle")
     def __init__(self, pos: Vector, particle: SoftBodyParticle, colour: Colour = game.YELLOW) -> None:
         super().__init__(pos, colour)
         self.particle = particle

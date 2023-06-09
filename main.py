@@ -90,10 +90,10 @@ def create_map():
     game.OBJECTS.add(Player_Pusher(Vector(0, 0)))
 
     # Rectangles
-    game.OBJECTS.add(Rect(Vector(250, 200), 300, 75, rotation=-20))
-    game.OBJECTS.add(Rect(Vector(620, 320), 350, 75, rotation=30))
-    game.OBJECTS.add(Rect(Vector(270, 490), 300, 75, rotation=-25))
-    game.OBJECTS.add(Rect(Vector(620, 640), 400, 75, rotation=30))
+    game.OBJECTS.add(Rect(Vector(250, 180), 350, 75, rotation=-18))
+    game.OBJECTS.add(Rect(Vector(640, 320), 350, 75, rotation=30))
+    game.OBJECTS.add(Rect(Vector(260, 490), 300, 75, rotation=-25))
+    game.OBJECTS.add(Rect(Vector(640, 640), 400, 75, rotation=30))
 
 def main():
     delta_time = 0
