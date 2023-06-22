@@ -33,14 +33,14 @@ class Text():
 class Canvas():
     texts = [
         Text(lambda: f"Gravity: {game.GRAVITY}"),
-        Text(lambda: f"Spring Lenth: {game.SPRING_LENGTH}"),
+        Text(lambda: f"Spring Length: {game.SPRING_LENGTH}"),
         Text(lambda: f"Spring Coefficient: {game.SPRING_COEFFICIENT}"),
         Text(lambda: f"Spring Dampening: {game.SPRING_DAMPENING}"),
         Text(lambda: f"Player Spring Coefficient: {game.PLAYER_SPRING_COEFFICIENT}"),
         Text(lambda: f"Air Resistance: {game.AIR_RESISTANCE}")
     ]
     x = 8
-    y = 50
+    y = 200
     gap = 30
 
     def draw() -> None:

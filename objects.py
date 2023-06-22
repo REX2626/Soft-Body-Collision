@@ -219,7 +219,7 @@ class Particle(Object):
             self.velocity.rotate(2*angle_diff)  # 1 diff is parallel to line, 2 diff goes away from line
 
     def update(self, delta_time: float) -> None:
-        # Air resitance
+        # Air resistance
         if self.velocity:
             # Reduce velocity proportional to velocity
             self.velocity.set_magnitude(self.velocity.magnitude() * (1 - delta_time * game.AIR_RESISTANCE))
@@ -277,20 +277,21 @@ class SoftBodyParticle(Particle):
                     normal.set_magnitude(2*self.size - self.pos.distance_to(particle.pos) + 0)
                     self.pos += normal
 
-    def dampen(self, force: float) -> float:
+    def dampen(self, neighbour: SoftBodyParticle, force: float) -> float:
+        speed = neighbour.velocity.magnitude() - self.velocity.magnitude()
         if force > 0:
-            return max(0, force - game.SPRING_DAMPENING)
+            return max(0, force + speed * game.SPRING_DAMPENING)
 
         else:
-            return min(0, force + game.SPRING_DAMPENING)
+            return min(0, force - speed * game.SPRING_DAMPENING)
 
     def update_springs(self, delta_time: float) -> None:
         """Accelerate this Particle with the Force from the springs connected to it's neighbours"""
         for neighbour, length in self.neighbours:
             distance = self.pos.distance_to(neighbour.pos)
             extension = distance - length
-            force = game.SPRING_COEFFICIENT * extension
-            force = self.dampen(force)
+            force = game.SPRING_COEFFICIENT * extension / length
+            force = self.dampen(neighbour, force)
             acceleration = neighbour.pos - self.pos
             acceleration.set_magnitude(force)  # Acceleration = Force, as mass == 1
             self.velocity += acceleration * delta_time
@@ -298,6 +299,15 @@ class SoftBodyParticle(Particle):
     def draw_springs(self) -> None:
         for neighbour, _ in self.neighbours:
             pygame.draw.line(game.WIN, game.CYAN, self.pos.to_tuple(), neighbour.pos.to_tuple(), width=3)
+
+
+
+class ImmovableSoftBodyParticle(SoftBodyParticle):
+    def update(self, delta_time: float) -> None:
+        pass
+
+    def update_springs(self, delta_time: float) -> None:
+        pass
 
 
 
@@ -361,12 +371,104 @@ class SoftBody(Object):
         for particle in self.particles:
             particle.update(delta_time)
 
-    def draw(self) -> None:
+    def draw_outline(self) -> None:
+        particles: list[SoftBodyParticle] = []
         for particle in self.particles:
-            particle.draw_springs()
+            if len(particle.neighbours) < 8:
+                particles.append(particle)
 
-        for particle in self.particles:
-            particle.draw()
+        particles = [particle.pos.to_tuple() for particle in particles]
+        pygame.draw.lines(game.WIN, game.CYAN, False, particles[:self.height], width=6)
+        pygame.draw.lines(game.WIN, game.CYAN, False, particles[-self.height:], width=6)
+        a, b = [particles[0]], [particles[self.height-1]]
+        x = False
+        for particle in particles[self.height:-self.height]:
+            x = not x
+            if x: a.append(particle)
+            else: b.append(particle)
+        a.append(particles[-self.height])
+        b.append(particles[-1])
+        pygame.draw.lines(game.WIN, game.CYAN, False, a, width=6)
+        pygame.draw.lines(game.WIN, game.CYAN, False, b, width=6)
+
+    def draw(self) -> None:
+        if game.OUTLINE:
+            self.draw_outline()
+
+        else:
+            for particle in self.particles:
+                particle.draw_springs()
+
+            for particle in self.particles:
+                particle.draw()
+
+
+
+class CircularSoftBody(SoftBody):
+    """
+    `width` is number of layers
+
+    `height` is number of particles per layer
+    """
+    def spawn_particles(self) -> None:
+        particles: list[list[SoftBodyParticle]] = []
+        angle = math.tau / self.height
+        for layer in range(self.width):
+            particles.append([])
+            length = game.SPRING_LENGTH * (layer+1)
+            for i in range(self.height):
+                pos = self.pos + Vector(length*math.sin(i*angle), length*math.cos(i*angle))
+                particles[layer].append(SoftBodyParticle(pos, colour=self.colour))
+
+        #middle_particle = ImmovableSoftBodyParticle(self.pos, colour=game.GREEN)
+        middle_particle = SoftBodyParticle(self.pos, colour=self.colour)
+
+        for idx, layer in enumerate(particles):
+            adjacent_length = layer[0].pos.distance_to(layer[1].pos)
+            if idx != 0: inner_diagonal_length = layer[0].pos.distance_to(particles[idx-1][1].pos)
+            if idx != self.width-1: outer_diagonal_length = layer[0].pos.distance_to(particles[idx+1][1].pos)
+            for i, particle in enumerate(layer):
+                # Left particle
+                if i == 0: particle.neighbours.append([layer[-1], adjacent_length])
+                else: particle.neighbours.append([layer[i-1], adjacent_length])
+
+                # Right particle
+                if i == self.height-1: particle.neighbours.append([layer[0], adjacent_length])
+                else: particle.neighbours.append([layer[i+1], adjacent_length])
+
+                # Inner particles
+                if idx == 0: particle.neighbours.append([middle_particle, game.SPRING_LENGTH])
+                else:
+                    # Middle
+                    particle.neighbours.append([particles[idx-1][i], game.SPRING_LENGTH])
+                    # Left
+                    if i == 0: particle.neighbours.append([particles[idx-1][-1], inner_diagonal_length])
+                    else: particle.neighbours.append([particles[idx-1][i-1], inner_diagonal_length])
+                    # Right
+                    if i == self.height-1: particle.neighbours.append([particles[idx-1][0], inner_diagonal_length])
+                    else: particle.neighbours.append([particles[idx-1][i+1], inner_diagonal_length])
+
+                # Outer particle
+                if idx != self.width-1:
+                    # Middle
+                    particle.neighbours.append([particles[idx+1][i], game.SPRING_LENGTH])
+                    # Left
+                    if i == 0: particle.neighbours.append([particles[idx+1][-1], outer_diagonal_length])
+                    else: particle.neighbours.append([particles[idx+1][i-1], outer_diagonal_length])
+                    # Right
+                    if i == self.height-1: particle.neighbours.append([particles[idx+1][0], outer_diagonal_length])
+                    else: particle.neighbours.append([particles[idx+1][i+1], outer_diagonal_length])
+
+        for particle in particles[0]:
+            middle_particle.neighbours.append([particle, game.SPRING_LENGTH])
+        self.particles.append(middle_particle)
+
+        for layer in particles:
+            for particle in layer:
+                self.particles.append(particle)
+
+    def draw_outline(self) -> None:
+        pygame.draw.lines(game.WIN, game.CYAN, True, [particle.pos.to_tuple() for particle in self.particles[-self.height:]], width=6)
 
 
 

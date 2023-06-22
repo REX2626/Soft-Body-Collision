@@ -1,5 +1,5 @@
 import game
-from objects import Vector, Particle, SoftBody, Rect, Player_Spring, Player_Pusher
+from objects import Vector, Particle, SoftBody, CircularSoftBody, Rect, Player_Spring, Player_Pusher
 from ui import Canvas
 import time
 import pygame
@@ -28,6 +28,9 @@ def handle_events():
 
         elif event.type == pygame.KEYDOWN and event.key == pygame.K_TAB:
             game.SOFT_MODE = not game.SOFT_MODE
+
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_o:
+            game.OUTLINE = not game.OUTLINE
 
     keys_pressed = pygame.key.get_pressed()
 
@@ -82,7 +85,8 @@ def create_border():
 def create_map():
     # Soft body
     global soft_body
-    soft_body = SoftBody(Vector(200, 0), width=4, height=4)
+    soft_body = SoftBody(Vector(500, 50), width=4, height=4)
+    #soft_body = CircularSoftBody(Vector(570, 100), 5, 50)
     game.OBJECTS.add(soft_body)
 
     # Player stuff
@@ -111,7 +115,7 @@ def main():
         handle_events()
 
         time2 = time.perf_counter()
-        delta_time = time2 - time1
+        delta_time = min(time2 - time1, 1/game.MIN_FPS)
 
 
 if __name__ == "__main__":
