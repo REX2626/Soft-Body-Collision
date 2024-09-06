@@ -1,3 +1,3 @@
 # Soft-Body-Collision
 
-[Paper](Soft_Body_Collision.pdf)
+**[Here](Soft_Body_Collision.pdf)** is a paper describing how I implented the simulation.
